@@ -5,19 +5,47 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileUpIcon, UserPlusIcon, ClipboardIcon, UserIcon, Stethoscope } from 'lucide-react'
+import axios from "axios"
 
 export default function DoctorDashboardComponent() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [patientName, setPatientName] = useState('')
+  const [predictionResult, setPredictionResult] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) setSelectedFile(file)
   }
 
-  const runMLModel = () => {
-    console.log('Running ML model on uploaded scan')
-  }
+  const runMLModel = async () => {
+    if (!selectedFile) return;
+  
+    setLoading(true); // Start loading state
+    setPredictionResult(null); // Clear previous result
+  
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile, selectedFile.name);
+  
+      const response = await axios.post("http://localhost:5000/predict/", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+  
+      // Assuming response.data is { predicted_class: 'AD', confidence: 0.51 }
+      const { predicted_class, confidence } = response.data;
+      setPredictionResult(`Prediction: ${predicted_class} (Confidence: ${(confidence * 100).toFixed(2)}%)`);
+    } catch (error) {
+      setPredictionResult("Error: Failed to get prediction");
+      console.error('API Error:', error);
+    } finally {
+      setLoading(false); // Stop loading state
+    }
+  };
+  
+
 
   const viewPreviousReports = () => {
     console.log('Viewing previous reports')
@@ -47,9 +75,15 @@ export default function DoctorDashboardComponent() {
           <CardContent>
             <div className="space-y-4">
               <Input type="file" onChange={handleFileUpload} className="bg-white" />
-              <Button onClick={runMLModel} disabled={!selectedFile} className="w-full bg-green-600 hover:bg-green-700">
-                <FileUpIcon className="mr-2 h-4 w-4" /> Run ML Model
+              <Button onClick={runMLModel} disabled={!selectedFile || loading} className="w-full bg-green-600 hover:bg-green-700">
+                <FileUpIcon className="mr-2 h-4 w-4" /> {loading ? "Running..." : "Run ML Model"}
               </Button>
+
+              {predictionResult && (
+                <div className="mt-4 p-3 bg-gray-100 rounded-md text-center">
+                  {predictionResult}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -95,6 +129,7 @@ export default function DoctorDashboardComponent() {
             </Button>
           </CardContent>
         </Card>
+
       </div>
     </div>
   )
