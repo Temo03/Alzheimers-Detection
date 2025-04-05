@@ -1,71 +1,74 @@
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
-  // Create a response object
-  let supabaseResponse = NextResponse.next();
+  let response = NextResponse.next({
+    request: { headers: request.headers }
+  })
 
-  // Initialize Supabase server client
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
+        get(name) {
+          return request.cookies.get(name)?.value
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            supabaseResponse.cookies.set(name, value, options);
-          });
+        set(name, value, options) {
+          request.cookies.set({ name, value, ...options })
+          response = NextResponse.next({
+            request: { headers: request.headers }
+          })
+          response.cookies.set({ name, value, ...options })
         },
-      },
+        remove(name, options) {
+          request.cookies.set({ name, value: '', ...options })
+          response = NextResponse.next({
+            request: { headers: request.headers }
+          })
+          response.cookies.delete(name)
+        }
+      }
     }
-  );
+  )
 
-  // Fetch the authenticated user
-  const { data: { user }, error } = await supabase.auth.getUser();
+  // Refresh expired session
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (!session) await supabase.auth.refreshSession()
 
-  if (error) {
-    console.error('Error fetching user:', error);
+  // Get authenticated user
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Define public paths
+  const publicPaths = ['/', '/login', '/signup', '/reset-password']
+  const currentPath = request.nextUrl.pathname
+
+  // Redirect unauthenticated users
+  if (!user && !publicPaths.includes(currentPath)) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  const currentPath = request.nextUrl.pathname;
-
-  // Define allowed paths for unauthenticated users
-  const allowedPaths = ['/', '/login', '/signup', '/reset_password', '/auth'];
-
-  // Redirect logic for unauthenticated users
-  if (!user && !allowedPaths.includes(currentPath)) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  // Allow authenticated users to access the root page ('/') for role selection
-  if (currentPath === '/') {
-    return NextResponse.next(); // Allow access to '/'
-  }
-
-  // Role-based redirection for authenticated users accessing protected routes
+  // Role verification (both JWT and database)
   if (user) {
-    const userType = user.user_metadata?.user_type; // Fetch user type from metadata
+    // Get user type from database
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('user_type')
+      .eq('id', user.id)
+      .single()
 
-    // Protected route check for doctors
+    const userType = profile?.user_type || user.user_metadata?.user_type
+    
+    // Doctor route protection
     if (currentPath.startsWith('/dashboard/doctor') && userType !== 'doctor') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/login/doctor'; // Redirect unauthorized access
-      return NextResponse.redirect(url);
+      return NextResponse.redirect(new URL('/login/doctor', request.url))
     }
 
-    // Protected route check for patients
+    // Patient route protection
     if (currentPath.startsWith('/dashboard/patient') && userType !== 'patient') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/login/patient'; // Redirect unauthorized access
-      return NextResponse.redirect(url);
+      return NextResponse.redirect(new URL('/login/patient', request.url))
     }
   }
 
-  // Allow normal routing for authenticated users or allowed paths
-  return supabaseResponse;
+  return response
 }

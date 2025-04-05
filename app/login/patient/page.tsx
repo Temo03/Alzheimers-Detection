@@ -1,61 +1,69 @@
 'use client';
 
 import { useState } from 'react';
-import { createClient } from '@/utils/supabase/client'; // Import Supabase client
-import { useRouter } from 'next/navigation'; // For Next.js routing
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
-  // Create a Supabase client instance
   const supabase = createClient();
 
+  // Handle login form submission
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage('');
+    setIsSubmitting(true);
 
     try {
-      // Authenticate the user with Supabase Auth
+      // Authenticate user with email and password
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) {
-        setErrorMessage('Invalid email or password');
+        setErrorMessage(authError.message || 'Invalid email or password');
         return;
       }
 
-      // Fetch user metadata after login
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+      if (!userId) {
+        setErrorMessage('User not found');
+        return;
+      }
 
-      if (userError || !userData?.user) {
+      // Fetch user profile to determine redirection
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_type')
+        .eq('id', userId)
+        .single();
+
+      if (profileError || !profileData) {
         setErrorMessage('Failed to fetch user profile');
         return;
       }
 
-      console.log('User Metadata:', userData.user.user_metadata); // Debug log for metadata
+      const { user_type } = profileData;
 
-      const userType = userData.user.user_metadata?.user_type;
-
-      if (!userType) {
-        setErrorMessage('Unknown user type. Please contact support.');
-        return;
-      }
-
-      // Redirect based on role
-      if (userType === 'doctor') {
-        setErrorMessage("Please Login from the Doctor's Dashboard");
-      } else if (userType === 'patient') {
+      // Redirection logic based on user type
+      if (user_type === 'doctor') {
+        setErrorMessage("Please login from the Doctor's Dashboard");
+      } else if (user_type === 'patient') {
         router.push('/dashboard/patient');
       } else {
         setErrorMessage('Unknown user type. Please contact support.');
       }
     } catch (err) {
       console.error('Error during login:', err);
-      setErrorMessage('An error occurred. Please try again.');
+      setErrorMessage('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -73,11 +81,7 @@ export default function LoginPage() {
               stroke="currentColor"
               className="w-6 h-6 mr-2"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Alzheimer's Detection System
           </h1>
@@ -90,11 +94,8 @@ export default function LoginPage() {
           <h2 className="text-2xl font-extrabold text-center text-blue-600">Welcome Back</h2>
           <p className="text-center text-gray-500 mb-6">Sign in to access your medical dashboard</p>
 
-          {errorMessage && (
-            <p className="text-center text-red-500 mb-4">{errorMessage}</p>
-          )}
+          {errorMessage && <p className="text-center text-red-500 mb-4">{errorMessage}</p>}
 
-          {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Email Field */}
             <div>
@@ -140,9 +141,12 @@ export default function LoginPage() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition duration-150 shadow-md"
+              disabled={isSubmitting}
+              className={`w-full py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition duration-150 shadow-md ${
+                isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
             >
-              Sign In
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 

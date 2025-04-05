@@ -1,62 +1,69 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { createClient } from '@/utils/supabase/client'; // Import Supabase client
-import { useRouter } from 'next/navigation'; // For Next.js routing
+import { useState } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
-
-  // Create a Supabase client instance
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    setErrorMessage("");
 
     try {
-      // Authenticate the user with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) {
-        setErrorMessage('Invalid email or password');
+        setErrorMessage("Invalid email or password");
+        setIsSubmitting(false);
         return;
       }
 
-      // Fetch user metadata after login
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-
-      if (userError || !userData?.user) {
-        setErrorMessage('Failed to fetch user profile');
+      const userId = authData.user?.id;
+      if (!userId) {
+        setErrorMessage("User not found");
+        setIsSubmitting(false);
         return;
       }
 
-      console.log('User Metadata:', userData.user.user_metadata); // Debug log for metadata
+      // Fetch user profile
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("user_type, first_login")
+        .eq("id", userId)
+        .single();
 
-      const userType = userData.user.user_metadata?.user_type;
-
-      if (!userType) {
-        setErrorMessage('Unknown user type. Please contact support.');
+      if (profileError || !profileData) {
+        setErrorMessage("Failed to fetch user profile");
+        setIsSubmitting(false);
         return;
       }
 
-      // Redirect based on role
-      if (userType === 'doctor') {
-        router.push('/dashboard/doctor');
-      } else if (userType === 'patient') {
-        setErrorMessage("Please Login from the Patient's Dashboard");
+      const { user_type, first_login } = profileData;
+
+      // Handle user type routing
+      if (user_type === "doctor") {
+        router.push(first_login ? "/fill_info/doctor" : "/dashboard/doctor");
+      } else if (user_type === "patient") {
+        setErrorMessage("Please login from the Patient's Dashboard");
       } else {
-        setErrorMessage('Unknown user type. Please contact support.');
+        setErrorMessage("Unknown user type. Please contact support.");
       }
     } catch (err) {
-      console.error('Error during login:', err);
-      setErrorMessage('An error occurred. Please try again.');
+      console.error("Login error:", err);
+      setErrorMessage("An error occurred. Please try again.");
     }
+    setIsSubmitting(false);
   };
 
   return (
@@ -73,11 +80,7 @@ export default function LoginPage() {
               stroke="currentColor"
               className="w-6 h-6 mr-2"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Alzheimer's Detection System
           </h1>
@@ -90,11 +93,8 @@ export default function LoginPage() {
           <h2 className="text-2xl font-extrabold text-center text-blue-600">Welcome Back</h2>
           <p className="text-center text-gray-500 mb-6">Sign in to access your medical dashboard</p>
 
-          {errorMessage && (
-            <p className="text-center text-red-500 mb-4">{errorMessage}</p>
-          )}
+          {errorMessage && <p className="text-center text-red-500 mb-4">{errorMessage}</p>}
 
-          {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Email Field */}
             <div>
@@ -141,14 +141,15 @@ export default function LoginPage() {
             <button
               type="submit"
               className="w-full py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition duration-150 shadow-md"
+              disabled={isSubmitting}
             >
-              Sign In
+              {isSubmitting ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
           {/* Sign Up Link */}
           <p className="mt-6 text-center text-sm text-gray-600">
-            Don't have an account?{' '}
+            Don't have an account?{" "}
             <a href="/signup" className="text-blue-600 font-medium hover:underline">
               Sign up
             </a>

@@ -8,7 +8,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [userType, setUserType] = useState('patient'); // Default role
+  const [userType, setUserType] = useState('doctor'); // Default role is 'doctor'
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
@@ -25,15 +25,33 @@ export default function SignupPage() {
       return;
     }
 
+    if(userType === "patient"){
+      const { data: patientsData } = await supabase
+            .from("Patients")
+            .select("*")
+            .eq("email", email)
+      
+            
+      if(!patientsData || patientsData.length === 0)
+      {
+        setErrorMessage('Patients must be added by their doctor before signing up.');
+        return;
+      }
+    }
+
     try {
       // Call Supabase's signUp method
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { user_type: userType }, // Store user type in metadata
+          data: {
+            user_type: userType, // Use snake_case key to match the trigger
+          },
         },
       });
+      
+      
 
       if (error) {
         setErrorMessage(error.message || 'An error occurred during signup');
@@ -43,7 +61,7 @@ export default function SignupPage() {
       if (data.user) {
         setSuccessMessage('Signup successful! Redirecting...');
         // Redirect to login page after a short delay
-        setTimeout(() => router.push('/login'), 500);
+        setTimeout(() => router.push('/login'), 1500);
       }
     } catch (err) {
       console.error('Error during signup:', err);

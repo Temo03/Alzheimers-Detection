@@ -1,106 +1,92 @@
 'use client';
 
-import { useState } from 'react';
-import { createClient } from '@/utils/supabase/client'; // Import Supabase client
-import { useRouter } from 'next/navigation'; // For Next.js routing
+import { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  // Create a Supabase client instance
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setErrorMessage('');
 
     try {
-      // Authenticate the user with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password 
       });
 
-      if (authError) {
-        setErrorMessage('Invalid email or password');
+      if (error) {
+        setErrorMessage(error.status === 400 
+          ? 'Invalid email or password' 
+          : 'Login failed. Please try again.');
         return;
       }
 
-      // Fetch user metadata after login
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-
-      if (userError || !userData?.user) {
-        setErrorMessage('Failed to fetch user profile');
-        return;
+      if (data?.user) {
+        await handleUserRedirect(data.user.id);
       }
 
-      console.log('User Metadata:', userData.user.user_metadata); // Debug log for metadata
-
-      const userType = userData.user.user_metadata?.user_type;
-
-      if (!userType) {
-        setErrorMessage('Unknown user type. Please contact support.');
-        return;
-      }
-
-      // Redirect based on role
-      if (userType === 'doctor') {
-        router.push('/dashboard/doctor');
-      } else if (userType === 'patient') {
-        router.push('/dashboard/patient');
-      } else {
-        setErrorMessage('Unknown user type. Please contact support.');
-      }
     } catch (err) {
-      console.error('Error during login:', err);
-      setErrorMessage('An error occurred. Please try again.');
+      console.error('Login error:', err);
+      setErrorMessage('An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleUserRedirect = async (userId: string) => {
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('user_type, first_login')
+      .eq('id', userId)
+      .single();
+
+    if (profileError || !profileData) {
+      setErrorMessage('Failed to fetch user profile.');
+      return;
+    }
+
+    const { user_type, first_login } = profileData;
+    const redirectPath = user_type === 'doctor' 
+      ? (first_login ? '/fill_info/doctor' : '/dashboard/doctor')
+      : user_type === 'patient' 
+        ? '/dashboard/patient'
+        : '/error';
+
+    router.push(redirectPath);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-green-50 flex flex-col">
-      {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="container mx-auto px-4 py-4 flex items-center">
           <h1 className="text-xl font-bold text-blue-600 flex items-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-6 h-6 mr-2"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-              />
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 mr-2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Alzheimer's Detection System
           </h1>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-grow flex items-center justify-center">
         <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-lg">
           <h2 className="text-2xl font-extrabold text-center text-blue-600">Welcome Back</h2>
           <p className="text-center text-gray-500 mb-6">Sign in to access your medical dashboard</p>
 
-          {errorMessage && (
-            <p className="text-center text-red-500 mb-4">{errorMessage}</p>
-          )}
+          {errorMessage && <p className="text-center text-red-500 mb-4">{errorMessage}</p>}
 
-          {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
               <input
                 type="email"
                 id="email"
@@ -113,11 +99,8 @@ export default function LoginPage() {
               />
             </div>
 
-            {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
               <input
                 type="password"
                 id="password"
@@ -130,28 +113,22 @@ export default function LoginPage() {
               />
             </div>
 
-            {/* Forgot Password */}
             <div className="flex items-center justify-between">
-              <a href="/reset_password" className="text-sm text-green-600 hover:underline">
-                Forgot password?
-              </a>
+              <a href="/reset_password" className="text-sm text-green-600 hover:underline">Forgot password?</a>
             </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
+            <button 
+              type="submit" 
               className="w-full py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition duration-150 shadow-md"
+              disabled={loading}
             >
-              Sign In
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
-          {/* Sign Up Link */}
           <p className="mt-6 text-center text-sm text-gray-600">
             Don't have an account?{' '}
-            <a href="/signup" className="text-blue-600 font-medium hover:underline">
-              Sign up
-            </a>
+            <a href="/signup" className="text-blue-600 font-medium hover:underline">Sign up</a>
           </p>
         </div>
       </main>
