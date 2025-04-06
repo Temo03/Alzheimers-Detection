@@ -40,7 +40,7 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Define public paths
-  const publicPaths = ['/', '/login', '/signup', '/reset-password']
+  const publicPaths = ['/', '/login', '/signup', '/reset_password']
   const currentPath = request.nextUrl.pathname
 
   // Redirect unauthenticated users
