@@ -137,7 +137,7 @@ Based on the findings, the following recommendations are made:
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen min-h-screen bg-gradient-to-b from-blue-50 to-green-50">
       <main className="max-w-7xl mx-auto w-full">
         <h2 className="text-2xl font-bold text-blue-600 mb-6">MRI Image Analysis</h2>
 

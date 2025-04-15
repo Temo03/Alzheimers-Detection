@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-blue-50">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-blue-50 to-green-50">
       <div className="flex flex-col items-center">
         {/* Animated Loading Icon */}
         <svg

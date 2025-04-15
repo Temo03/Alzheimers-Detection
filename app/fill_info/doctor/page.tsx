@@ -171,7 +171,7 @@ export default function DoctorSignupPage() {
 
   if (isComplete) {
     return (
-      <div className="p-6 max-w-7xl mx-auto bg-blue-50 min-h-screen flex flex-col items-center justify-center">
+      <div className="p-6 max-w-7xl mx-auto min-h-screen bg-gradient-to-b from-blue-50 to-green-50 flex flex-col items-center justify-center">
         <Card className="w-full max-w-md">
           <CardContent className="text-center py-6">
             <CheckCircle className="h-16 w-16 text-green-600 mx-auto animate-bounce" />
@@ -203,7 +203,7 @@ export default function DoctorSignupPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto bg-blue-50 min-h-screen flex flex-col items-center justify-center">
+    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-gradient-to-b from-blue-50 to-green-50 flex flex-col items-center justify-center">
       <div className="flex items-center mb-6">
         <Stethoscope className="h-8 w-8 text-blue-600 mr-2" />
         <h1 className="text-3xl font-bold text-blue-800">Complete Your Profile</h1>
@@ -225,7 +225,7 @@ export default function DoctorSignupPage() {
                   <Input
                     id="name"
                     name="name"
-                    placeholder="Dr. John Doe"
+                    placeholder="John Doe"
                     value={formData.name}
                     onChange={handleInputChange}
                     required
