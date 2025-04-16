@@ -3,16 +3,21 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileUpIcon, FileTextIcon, RotateCw, AlertCircle } from "lucide-react"
+import { FileUpIcon, FileTextIcon, RotateCw, AlertCircle, Download, Save, User } from "lucide-react"
 import axios from "axios"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { createClient } from "@supabase/supabase-js"
 
 export default function MriAnalysisDashboard() {
+  const searchParams = useSearchParams()
+  const patientId = searchParams.get("patientId")
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [predictionResult, setPredictionResult] = useState<any | null>(null)
@@ -21,6 +26,34 @@ export default function MriAnalysisDashboard() {
   const [generatingReport, setGeneratingReport] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle")
+  const [patientName, setPatientName] = useState<string>("")
+  const [supabase, setSupabase] = useState<any>(null)
+
+  // Initialize Supabase client and fetch patient info
+  useEffect(() => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+    const client = createClient(supabaseUrl, supabaseKey)
+    setSupabase(client)
+
+    // Fetch patient name if patientId is available
+    const fetchPatientName = async () => {
+      if (!patientId) return
+
+      try {
+        const { data, error } = await client.from("Patients").select("Name").eq("PatientID", patientId).single()
+
+        if (error) throw error
+        if (data) setPatientName(data.Name)
+      } catch (error) {
+        console.error("Error fetching patient:", error)
+        setPatientName("Unknown Patient")
+      }
+    }
+
+    fetchPatientName()
+  }, [patientId])
 
   // Handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,6 +140,10 @@ export default function MriAnalysisDashboard() {
         const reportText = `
 # MRI Analysis Report
 
+## Patient
+Name: ${patientName}
+ID: ${patientId}
+
 ## Diagnosis
 The model predicts **${diagnosis}** with a confidence of **${(confidence * 100).toFixed(2)}%**.
 
@@ -136,10 +173,137 @@ Based on the findings, the following recommendations are made:
     }
   }
 
+  // Save report to Supabase
+  const saveReportToSupabase = async () => {
+    if (!report || !selectedFile || !predictionResult || !patientId || !supabase) return
+
+    setSaveStatus("saving")
+
+    try {
+      // Step 1: Upload MRI scan to brainscans bucket
+      const timestamp = Date.now()
+      const scanFileName = `${timestamp}-${selectedFile.name}`
+      const scanFilePath = `${patientId}/${scanFileName}`
+
+      const { data: scanData, error: scanError } = await supabase.storage
+        .from("brainscans")
+        .upload(scanFilePath, selectedFile)
+
+      if (scanError) throw scanError
+
+      // Get public URL for the uploaded scan
+      const { data: scanPublicURL } = supabase.storage.from("brainscans").getPublicUrl(scanFilePath)
+
+      // Step 2: Insert record into BrainScans table
+      const brainScanRecord = {
+        PatientID: patientId,
+        ImageType: selectedFile.name.endsWith(".nii.gz") ? "NIfTI-GZ" : "NIfTI",
+        ImageURL: scanPublicURL.publicUrl,
+      }
+
+      const { data: brainScanData, error: brainScanError } = await supabase
+        .from("BrainScans")
+        .insert(brainScanRecord)
+        .select()
+
+      if (brainScanError) throw brainScanError
+
+      const imageID = brainScanData[0].ImageID
+
+      // Step 3: Create report file and upload to reports bucket
+      const reportFileName = `${timestamp}-report.md`
+      const reportFilePath = `${patientId}/${reportFileName}`
+
+      const reportBlob = new Blob([report], { type: "text/markdown" })
+
+      const { data: reportData, error: reportError } = await supabase.storage
+        .from("reports")
+        .upload(reportFilePath, reportBlob)
+
+      if (reportError) throw reportError
+
+      // Get public URL for the uploaded report
+      const { data: reportPublicURL } = supabase.storage.from("reports").getPublicUrl(reportFilePath)
+
+      // Step 4: Insert record into Reports table
+      const reportRecord = {
+        PatientID: patientId,
+        ImageID: imageID,
+        ReportURL: reportPublicURL.publicUrl,
+      }
+
+      const { data: reportRecordData, error: reportRecordError } = await supabase
+        .from("Reports")
+        .insert(reportRecord)
+        .select()
+
+      if (reportRecordError) throw reportRecordError
+
+      setSaveStatus("success")
+      setTimeout(() => setSaveStatus("idle"), 3000)
+    } catch (error) {
+      console.error("Error saving to Supabase:", error)
+      setSaveStatus("error")
+      setTimeout(() => setSaveStatus("idle"), 3000)
+    }
+  }
+
+  // Download report as markdown file
+  const downloadReport = () => {
+    if (!report || !selectedFile) return
+
+    // Create blob from report text
+    const blob = new Blob([report], { type: "text/markdown" })
+
+    // Create download link
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+
+    // Generate filename from original file
+    const baseName = selectedFile.name.split(".")[0]
+    a.download = `${patientName.replace(/\s+/g, "-")}-${baseName}-report.md`
+
+    // Trigger download
+    document.body.appendChild(a)
+    a.click()
+
+    // Clean up
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // If no patientId is provided, show an error
+  if (!patientId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-green-50 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-red-600">Error</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>No patient selected. Please go back and select a patient.</p>
+            <Button className="mt-4 w-full" onClick={() => window.history.back()}>
+              Go Back
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen min-h-screen bg-gradient-to-b from-blue-50 to-green-50">
       <main className="max-w-7xl mx-auto w-full">
-        <h2 className="text-2xl font-bold text-blue-600 mb-6">MRI Image Analysis</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-blue-600">MRI Image Analysis</h2>
+          {patientName && (
+            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-sm">
+              <User className="h-4 w-4 text-blue-600" />
+              <span className="font-medium">{patientName}</span>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Image Upload and Preview */}
@@ -259,10 +423,43 @@ Based on the findings, the following recommendations are made:
         {/* Report Preview */}
         {report && (
           <Card className="mt-6 bg-white shadow-lg">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-blue-600">Generated Report</CardTitle>
+              <div className="flex gap-2">
+                <Button
+                  onClick={saveReportToSupabase}
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                  disabled={saveStatus === "saving"}
+                >
+                  {saveStatus === "saving" ? (
+                    <>
+                      <RotateCw className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save to Database
+                    </>
+                  )}
+                </Button>
+                <Button onClick={downloadReport} className="bg-green-600 text-white hover:bg-green-700">
+                  <Download className="mr-2 h-4 w-4" />
+                  Download Report
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
+              {saveStatus === "success" && (
+                <div className="mb-4 p-2 bg-green-50 text-green-600 rounded-md flex items-center">
+                  <span>Report and MRI scan saved successfully!</span>
+                </div>
+              )}
+              {saveStatus === "error" && (
+                <div className="mb-4 p-2 bg-red-50 text-red-600 rounded-md flex items-center">
+                  <span>Error saving report and MRI scan</span>
+                </div>
+              )}
               <Tabs defaultValue="preview">
                 <TabsList className="mb-4 bg-gray-100">
                   <TabsTrigger
@@ -282,6 +479,13 @@ Based on the findings, the following recommendations are made:
                 <TabsContent value="preview" className="mt-0">
                   <div className="p-4 bg-white rounded-md border border-gray-300 prose max-w-none">
                     <h1 className="text-2xl font-bold text-blue-600">MRI Analysis Report</h1>
+
+                    <h2 className="text-xl font-semibold text-blue-600 mt-4">Patient</h2>
+                    <p>
+                      <strong>Name:</strong> {patientName}
+                      <br />
+                      <strong>ID:</strong> {patientId}
+                    </p>
 
                     <h2 className="text-xl font-semibold text-blue-600 mt-4">Diagnosis</h2>
                     <p>
