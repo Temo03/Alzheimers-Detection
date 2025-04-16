@@ -147,9 +147,9 @@ export default function PatientReportsPage() {
   if (loading) return <Loading />
 
   return (
-    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-gradient-to-b from-blue-50 to-green-50">
+    <div className="h-screen w-screen flex flex-col bg-gradient-to-b from-blue-50 to-green-50 overflow-auto">
       {/* Header with Back Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 px-6 pt-6">
         <div className="flex items-center">
           <Button
             onClick={() => router.back()}
@@ -186,7 +186,7 @@ export default function PatientReportsPage() {
       </div>
 
       {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
+        <Card className="mb-6 mx-6 border-red-200 bg-red-50">
           <CardContent className="p-4">
             <div className="flex items-center text-red-600">
               <AlertCircle className="h-5 w-5 mr-2" />
@@ -196,7 +196,7 @@ export default function PatientReportsPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-6 pb-6 flex-grow">
         {/* Patient Info Section */}
         {patientInfo && (
           <Card className="col-span-1 border-none shadow-lg">
@@ -246,8 +246,6 @@ export default function PatientReportsPage() {
                   )}
                 </p>
               </div>
-
-
             </CardContent>
           </Card>
         )}

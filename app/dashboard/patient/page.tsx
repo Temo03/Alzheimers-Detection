@@ -213,8 +213,8 @@ export default function PatientDashboardComponent() {
   if (loading) return <Loading />
 
   return (
-    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-gradient-to-b from-blue-50 to-green-50">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div className="h-screen w-screen flex flex-col bg-gradient-to-b from-blue-50 to-green-50 overflow-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 px-6 pt-6">
         <div className="flex items-center">
           <HeartPulse className="h-8 w-8 text-green-600 mr-2" />
           <h1 className="text-2xl sm:text-3xl font-bold text-blue-800">
@@ -245,7 +245,7 @@ export default function PatientDashboardComponent() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mx-6">
         {/* Patient Info Section */}
         {patientInfo && (
           <Card className="col-span-1 border-none shadow-lg">

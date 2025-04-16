@@ -29,7 +29,7 @@ export default function ErrorPage() {
                 d="M12 9v2m0 4h.01M12 6a9 9 0 100 18 9 9 0 000-18z"
               />
             </svg>
-            Alzheimer's Detection System
+            Decision Support System
           </h1>
         </div>
       </header>

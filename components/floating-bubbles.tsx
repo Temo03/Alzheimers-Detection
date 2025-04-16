@@ -55,7 +55,7 @@ function FloatingBubbles() {
 }
 
 export default function FloatingBubblesBackground({
-  title = "Alzheimer's Detection System",
+  title = "Alzheimer's Decision Support System",
 }: {
   title?: string
 }) {

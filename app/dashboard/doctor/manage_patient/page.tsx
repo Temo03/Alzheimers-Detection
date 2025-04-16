@@ -207,13 +207,13 @@ export default function PatientInputPage() {
   if (loading) return <Loading />
 
   return (
-    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-gradient-to-b from-blue-50 to-green-50">
-      <div className="flex items-center mb-6">
+    <div className="h-screen w-screen flex flex-col bg-gradient-to-b from-blue-50 to-green-50 overflow-auto">
+      <div className="flex items-center mb-6 p-6">
         <HeartPulse className="h-8 w-8 text-green-600 mr-2" />
         <h1 className="text-3xl font-bold text-blue-800">Patient Management</h1>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
+      <div className="grid grid-cols-1 gap-8 flex-grow px-6 pb-6">
         {/* Patient Form Card */}
         <Card className="col-span-1 border-none shadow-lg">
           <CardHeader className={`${editMode ? "bg-blue-100" : "bg-green-100"} rounded-t-lg`}>

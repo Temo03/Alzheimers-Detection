@@ -73,7 +73,8 @@ export default function DoctorDashboard() {
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-2">
             <Stethoscope className="h-7 w-7 text-blue-600" />
-            <span className="text-xl font-bold text-blue-800">MediTrack</span>
+            <span className="text-xl font-bold text-blue-800">Decision Support System
+            </span>
           </div>
 
           <div className="flex items-center">
@@ -118,7 +119,7 @@ export default function DoctorDashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-12">
-        <h2 className="text-2xl font-bold text-blue-800 mb-8">Quick Actions</h2>
+        <h2 className="text-2xl font-bold text-blue-800 mb-8">Actions</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Manage Patients Card - Hardcoded */}
