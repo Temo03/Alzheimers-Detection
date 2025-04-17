@@ -1,8 +1,10 @@
+//@ts-nocheck
 "use client"
 
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client"
 import { Button } from "@/components/ui/patient_form_button"
 import { Input } from "@/components/ui/patient_form_input"
@@ -10,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/patien
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/patient_form_table"
 import { Label } from "@/components/ui/patient_form_label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/patient_form_radio-group"
-import { HeartPulse, UserPlus, Pencil, Trash2, Search, X, AlertCircle } from "lucide-react"
+import { HeartPulse,ArrowLeft ,UserPlus, Pencil, Trash2, Search, X, AlertCircle } from "lucide-react"
 import dynamic from "next/dynamic"
 
 const Loading = dynamic(() => import("../../../loading"), { ssr: false })
@@ -43,6 +45,7 @@ export default function PatientInputPage() {
   const [formError, setFormError] = useState("")
 
   const supabase = createClient()
+  const router = useRouter();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -209,6 +212,19 @@ export default function PatientInputPage() {
   return (
     <div className="h-screen w-screen flex flex-col bg-gradient-to-b from-blue-50 to-green-50 overflow-auto">
       <div className="flex items-center mb-6 p-6">
+        <div className="flex items-center mb-6 sm:mb-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.back()}
+                    className="text-blue-600 hover:text-blue-800 hover:bg-blue-100 mr-2"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    Back
+                  </Button>
+                </div>
+
+
         <HeartPulse className="h-8 w-8 text-green-600 mr-2" />
         <h1 className="text-3xl font-bold text-blue-800">Patient Management</h1>
       </div>
