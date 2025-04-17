@@ -32,6 +32,7 @@ export default function MriAnalysisDashboard() {
   useEffect(() => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+    const diagnosis = {"AD":"Alzheimer's Disease","CN":"Cognitively Normal","MCI":"Mild Cognitive Impairment"}
     setSupabase(createClient(supabaseUrl, supabaseKey))
 
     if (patientId) fetchPatientName()
@@ -201,8 +202,9 @@ export default function MriAnalysisDashboard() {
                   <div className="p-4 bg-white rounded-md border border-gray-300">
                     <h3 className="font-medium mb-2 text-blue-600">Diagnosis:</h3>
                     <p className="mb-1 text-lg font-semibold">
-                      {predictionResult.predicted_class} ({(predictionResult.probability * 100).toFixed(2)}%)
+                      {diagnosis[predictionResult.predicted_class] + "( " + predictionResult.predicted_class + ")"  } 
                     </p>
+                    <p>Probability of the Prediction being Correct: ({(predictionResult.probability * 100).toFixed(2)}%)</p>
 
                     <h4 className="font-medium mt-4 mb-2 text-blue-600">Key Features:</h4>
                     <ul className="list-disc pl-5 text-sm">
