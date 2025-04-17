@@ -10,7 +10,7 @@ import {
   HeartPulse,
   FileText,
   Download,
-  ChevronLeft,
+  ArrowLeft,
   Calendar,
   Mail,
   Phone,
@@ -154,10 +154,10 @@ export default function PatientReportsPage() {
           <Button
             onClick={() => router.back()}
             variant="ghost"
-            className="mr-2 p-2 h-10 w-10 rounded-full hover:bg-blue-100"
+            className="text-blue-600 hover:text-blue-800 hover:bg-blue-100 mr-2"
           >
-            <ChevronLeft className="h-5 w-5 text-blue-600" />
-            <span className="sr-only">Back</span>
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back
           </Button>
           <div>
             <div className="flex items-center">
@@ -180,7 +180,7 @@ export default function PatientReportsPage() {
           variant="outline"
           className="text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
         >
-          <ChevronLeft className="h-4 w-4 mr-1" />
+          <ArrowLeft className="h-4 w-4 mr-1" />
           Back to Dashboard
         </Button>
       </div>
