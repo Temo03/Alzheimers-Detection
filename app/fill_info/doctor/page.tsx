@@ -203,7 +203,7 @@ export default function DoctorSignupPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-gradient-to-b from-blue-50 to-green-50 flex flex-col items-center justify-center">
+    <div className="mx-auto min-h-screen bg-gradient-to-b from-blue-50 to-green-50 flex flex-col items-center justify-center">
       <div className="flex items-center mb-6">
         <Stethoscope className="h-8 w-8 text-blue-600 mr-2" />
         <h1 className="text-3xl font-bold text-blue-800">Complete Your Profile</h1>
