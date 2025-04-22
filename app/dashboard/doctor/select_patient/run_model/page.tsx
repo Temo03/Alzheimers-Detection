@@ -4,6 +4,8 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
+import { usePDF } from "react-to-pdf";
+
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,8 +25,13 @@ import axios from "axios"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { createClient } from "@supabase/supabase-js"
-
+import html2canvas from 'html2canvas-pro'; // Use the pro version
 export default function MriAnalysisDashboard() {
+  const diagnosis = {
+    AD: "Alzheimer's Disease",
+    CN: "Cognitively Normal",
+    MCI: "Mild Cognitive Impairment",
+  };
   const searchParams = useSearchParams()
   const router = useRouter()
   const patientId = searchParams.get("patientId")
@@ -44,7 +51,7 @@ export default function MriAnalysisDashboard() {
   const [fileId, setFileId] = useState<string | null>(null)
   const [preprocessing, setPreprocessing] = useState(false)
   const [heatmap, setHeatmap] = useState<string | null>(null)
-
+  const { toPDF, targetRef } = usePDF({ filename: 'MRI-Analysis-Report.pdf' });
   // Initialize Supabase client and fetch patient info
   useEffect(() => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
@@ -294,7 +301,14 @@ Based on the findings, the following recommendations are made:
       setTimeout(() => setSaveStatus("idle"), 3000)
     }
   }
-
+  const downloadPDF = async () => {
+    const element = document.getElementById('report-preview'); // The element you want to export
+    const canvas = await html2canvas(element);
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF();
+    pdf.addImage(imgData, 'PNG', 0, 0);
+    pdf.save('MRI-Analysis-Report.pdf');
+  };
   // Download report as markdown file
   const downloadReport = () => {
     if (!report || !selectedFile) return
@@ -527,7 +541,7 @@ Based on the findings, the following recommendations are made:
                     </>
                   )}
                 </Button>
-                <Button onClick={downloadReport} className="bg-green-600 text-white hover:bg-green-700">
+                <Button onClick={() => downloadPDF()} className="bg-green-600 text-white hover:bg-green-700">
                   <Download className="mr-2 h-4 w-4" />
                   Download Report
                 </Button>
@@ -560,7 +574,7 @@ Based on the findings, the following recommendations are made:
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="preview" className="mt-0">
+                <TabsContent id="report-preview" value="preview" className="mt-0" ref={targetRef}>
                   <div className="p-4 bg-white rounded-md border border-gray-300 prose max-w-none">
                     <h1 className="text-2xl font-bold text-blue-600">MRI Analysis Report</h1>
 
