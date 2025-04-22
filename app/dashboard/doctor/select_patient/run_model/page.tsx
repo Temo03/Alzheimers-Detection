@@ -56,7 +56,6 @@ export default function MriAnalysisDashboard() {
   useEffect(() => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-    const diagnosis = {"AD":"Alzheimer's Disease","CN":"Cognitively Normal","MCI":"Mild Cognitive Impairment"}
 
     const client = createClient(supabaseUrl, supabaseKey)
     setSupabase(client)
@@ -169,15 +168,15 @@ export default function MriAnalysisDashboard() {
       } catch (apiError) {
         console.error("API Error:", apiError)
         // Fall back to mock data if API fails
-        setPredictionResult({
-          predicted_class: "Alzheimer's Disease",
-          probability: 0.87,
-          features: {
-            hippocampal_volume: "Reduced by 23%",
-            ventricle_size: "Enlarged by 18%",
-            cortical_thickness: "Reduced in temporal lobe",
-          },
-        })
+        // setPredictionResult({
+        //   predicted_class: "Alzheimer's Disease",
+        //   probability: 0.87,
+        //   features: {
+        //     hippocampal_volume: "Reduced by 23%",
+        //     ventricle_size: "Enlarged by 18%",
+        //     cortical_thickness: "Reduced in temporal lobe",
+        //   },
+        // })
       }
     } catch (error) {
       console.error("ML Model Error:", error)
