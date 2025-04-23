@@ -5,7 +5,7 @@ import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
 import { usePDF } from "react-to-pdf";
-
+import { jsPDF } from "jspdf";
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,6 +52,9 @@ export default function MriAnalysisDashboard() {
   const [preprocessing, setPreprocessing] = useState(false)
   const [heatmap, setHeatmap] = useState<string | null>(null)
   const { toPDF, targetRef } = usePDF({ filename: 'MRI-Analysis-Report.pdf' });
+  const [comments, setComments] = useState<string>("");
+  const [patientData,setPatientData] = useState<any>(null);
+  const [doctorName, setDoctorName] = useState<string>("");
   // Initialize Supabase client and fetch patient info
   useEffect(() => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
@@ -62,16 +65,40 @@ export default function MriAnalysisDashboard() {
 
     // Fetch patient name if patientId is available
     const fetchPatientName = async () => {
-      if (!patientId) return
+      if (!patientId) return;
 
       try {
-        const { data, error } = await client.from("Patients").select("Name").eq("PatientID", patientId).single()
+        // Fetch patient data
+        const { data: patientData, error: patientError } = await client
+          .from("Patients")
+          .select("*")
+          .eq("PatientID", patientId)
+          .single();
 
-        if (error) throw error
-        if (data) setPatientName(data.Name)
+        if (patientError) throw patientError;
+
+        if (patientData) {
+          setPatientName(patientData.Name);
+          setPatientData(patientData);
+          console.log("Patient Data:", patientData);
+
+          // Fetch doctor data using the Doctor field from patientData
+          const { data: doctorData, error: doctorError } = await client
+            .from("HealthcareProviders")
+            .select("*")
+            .eq("ProviderID", patientData.Doctor)
+            .single();
+
+          if (doctorError) throw doctorError;
+
+          if (doctorData) {
+            setDoctorName(doctorData.Name);
+            console.log("Doctor Data:", doctorData);
+          }
+        }
       } catch (error) {
-        console.error("Error fetching patient:", error)
-        setPatientName("Unknown Patient")
+        console.error("Error fetching patient or doctor data:", error);
+        setPatientName("Unknown Patient");
       }
     }
 
@@ -213,11 +240,6 @@ ID: ${patientId}
 ## Diagnosis
 The model predicts **${diagnosis}** with a confidence of **${(confidence * 100).toFixed(2)}%**.
 
-## Key Findings
-${Object.entries(features)
-  .map(([key, value]) => `- **${key.replace("_", " ")}**: ${value}`)
-  .join("\n")}
-
 ## Recommendations
 Based on the findings, the following recommendations are made:
 - Follow-up scan in 3 months
@@ -241,9 +263,9 @@ Based on the findings, the following recommendations are made:
 
   // Save report to Supabase
   const saveReportToSupabase = async () => {
-    if (!report || !selectedFile || !predictionResult || !patientId || !supabase) return
+    if (!report || !selectedFile || !predictionResult || !patientId || !supabase) return;
 
-    setSaveStatus("saving")
+    setSaveStatus("saving");
 
     try {
       // Step 1: Get the ImageID from the already uploaded scan
@@ -252,60 +274,230 @@ Based on the findings, the following recommendations are made:
         .select("ImageID")
         .eq("PatientID", patientId)
         .order("Date", { ascending: false })
-        .limit(1)
+        .limit(1);
 
-      if (brainScansError) throw brainScansError
+      if (brainScansError) throw brainScansError;
 
-      const imageID = brainScans[0]?.ImageID
+      const imageID = brainScans[0]?.ImageID;
 
       if (!imageID) {
-        throw new Error("No image ID found for this patient")
+        throw new Error("No image ID found for this patient");
       }
 
-      // Step 2: Create report file and upload to reports bucket
-      const timestamp = Date.now()
-      const reportFileName = `${timestamp}-report.md`
-      const reportFilePath = `${patientId}/${reportFileName}`
+      const pdf = new jsPDF();
+    const pageWidth = pdf.internal.pageSize.width;
+    const pageHeight = pdf.internal.pageSize.height;
 
-      const reportBlob = new Blob([report], { type: "text/markdown" })
+    // Add hospital header
+    pdf.setFont("Times");
+    pdf.setFontSize(18);
+    pdf.setTextColor(40);
+    pdf.text("Hospital Name", pageWidth / 2, 15, { align: "center" });
+    pdf.setFontSize(12);
+    pdf.text("123 Health Street, Wellness City, HC 45678", pageWidth / 2, 22, { align: "center" });
+    pdf.text("Phone: (123) 456-7890 | Email: contact@hospital.com", pageWidth / 2, 28, { align: "center" });
+    pdf.setDrawColor(0);
+    pdf.setLineWidth(0.5);
+    pdf.line(10, 32, pageWidth - 10, 32);
+
+    // Add patient and doctor details
+    pdf.setFontSize(14);
+    pdf.setTextColor(0);
+    pdf.text("Patient Details", 10, 40);
+    pdf.setFontSize(12);
+    pdf.text(`Name: ${patientName}`, 10, 48);
+    pdf.text(`Email: ${patientData?.email || "Not Provided"}`, 10, 54);
+    pdf.text(`ID: ${patientId}`, 10, 60);
+    pdf.text(`Date: ${new Date().toLocaleDateString()}`, 10, 66);
+    pdf.text(`Doctor: ${doctorName || "Not Provided"}`, 10, 72);
+
+    // Add diagnosis and confidence
+    pdf.setFontSize(14);
+    pdf.text("Diagnosis", 10, 82);
+    pdf.setFontSize(12);
+    pdf.text(`The model predicts: ${diagnosis[predictionResult.predicted_class]} (${predictionResult.predicted_class})`, 10, 90);
+    pdf.text(`Confidence: ${(predictionResult.probability * 100).toFixed(2)}%`, 10, 96);
+
+    // Add recommendations
+    pdf.setFontSize(14);
+    pdf.text("Recommendations", 10, 106);
+    pdf.setFontSize(12);
+    pdf.text("- Follow-up scan in 3 months", 10, 114);
+    pdf.text("- Consultation with a neurologist", 10, 120);
+    pdf.text("- Additional cognitive testing", 10, 126);
+
+    // Add technical details
+    pdf.setFontSize(14);
+    pdf.text("Technical Details", 10, 136);
+    pdf.setFontSize(12);
+    pdf.text("- Model: Deep Learning CNN", 10, 144);
+    pdf.text("- Image Type: T1-weighted MRI", 10, 150);
+    pdf.text(`- Scan Date: ${new Date().toLocaleDateString()}`, 10, 156);
+
+    // Add preprocessed slice and heatmap
+    if (preprocessedImage || heatmap) {
+      pdf.setFontSize(14);
+      pdf.text("Images", pageWidth / 2, 166, { align: "center" });
+
+      const imageWidth = 80; // Fixed width for images
+      const imageHeight = 80; // Fixed height for images
+      const imageY = 172; // Fixed Y position
+      const preprocessedX = (pageWidth / 2) - imageWidth - 5; // Left of center
+      const heatmapX = (pageWidth / 2) + 5; // Right of center
+
+      if (preprocessedImage) {
+        pdf.addImage(preprocessedImage, 'PNG', preprocessedX, imageY, 70, 75);
+        pdf.text("Preprocessed Slice", preprocessedX + 10, imageY + imageHeight + 5);
+      }
+
+      if (heatmap) {
+        pdf.addImage(heatmap, 'PNG', heatmapX, imageY, imageWidth, 75);
+        pdf.text("Heatmap", heatmapX + 20, imageY + imageHeight + 5);
+      }
+    }
+
+    // Add comments section
+    if (comments.trim()) {
+      const commentsStartY = 260; // Adjust Y position
+      pdf.setFontSize(14);
+      pdf.text("Comments", 10, commentsStartY);
+      pdf.setFontSize(12);
+      pdf.text(comments, 10, commentsStartY + 8, { maxWidth: pageWidth - 20 });
+    }
+
+    // Add footer
+    pdf.setFontSize(10);
+    pdf.setTextColor(100);
+    pdf.text("This report is generated by Hospital MRI Analysis System.", pageWidth / 2, pageHeight - 10, { align: "center" });
+
+    pdf.save('MRI-Analysis-Report.pdf');
+
+      // Convert PDF to Blob
+      const pdfBlob = pdf.output("blob");
+
+      // Step 3: Upload the PDF report to Supabase
+      const timestamp = Date.now();
+      const reportFileName = `${timestamp}-report.pdf`;
+      const reportFilePath = `${patientId}/${reportFileName}`;
 
       const { data: reportData, error: reportError } = await supabase.storage
         .from("reports")
-        .upload(reportFilePath, reportBlob)
+        .upload(reportFilePath, pdfBlob);
 
-      if (reportError) throw reportError
+      if (reportError) throw reportError;
 
       // Get public URL for the uploaded report
-      const { data: reportPublicURL } = supabase.storage.from("reports").getPublicUrl(reportFilePath)
+      const { data: reportPublicURL } = supabase.storage.from("reports").getPublicUrl(reportFilePath);
 
-      // Step 3: Insert record into Reports table
+      // Step 4: Insert record into Reports table
       const reportRecord = {
         PatientID: patientId,
         ImageID: imageID,
         ReportURL: reportPublicURL.publicUrl,
-      }
+      };
 
       const { data: reportRecordData, error: reportRecordError } = await supabase
         .from("Reports")
         .insert(reportRecord)
-        .select()
+        .select();
 
-      if (reportRecordError) throw reportRecordError
+      if (reportRecordError) throw reportRecordError;
 
-      setSaveStatus("success")
-      setTimeout(() => setSaveStatus("idle"), 3000)
+      setSaveStatus("success");
+      setTimeout(() => setSaveStatus("idle"), 3000);
     } catch (error) {
-      console.error("Error saving to Supabase:", error)
-      setSaveStatus("error")
-      setTimeout(() => setSaveStatus("idle"), 3000)
+      console.error("Error saving to Supabase:", error);
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 3000);
     }
-  }
+  };
   const downloadPDF = async () => {
-    const element = document.getElementById('report-preview'); // The element you want to export
-    const canvas = await html2canvas(element);
-    const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF();
-    pdf.addImage(imgData, 'PNG', 0, 0);
+    const pageWidth = pdf.internal.pageSize.width;
+    const pageHeight = pdf.internal.pageSize.height;
+
+    // Add hospital header
+    pdf.setFont("Times");
+    pdf.setFontSize(18);
+    pdf.setTextColor(40);
+    pdf.text("Hospital Name", pageWidth / 2, 15, { align: "center" });
+    pdf.setFontSize(12);
+    pdf.text("123 Health Street, Wellness City, HC 45678", pageWidth / 2, 22, { align: "center" });
+    pdf.text("Phone: (123) 456-7890 | Email: contact@hospital.com", pageWidth / 2, 28, { align: "center" });
+    pdf.setDrawColor(0);
+    pdf.setLineWidth(0.5);
+    pdf.line(10, 32, pageWidth - 10, 32);
+
+    // Add patient and doctor details
+    pdf.setFontSize(14);
+    pdf.setTextColor(0);
+    pdf.text("Patient Details", 10, 40);
+    pdf.setFontSize(12);
+    pdf.text(`Name: ${patientName}`, 10, 48);
+    pdf.text(`Email: ${patientData?.email || "Not Provided"}`, 10, 54);
+    pdf.text(`ID: ${patientId}`, 10, 60);
+    pdf.text(`Date: ${new Date().toLocaleDateString()}`, 10, 66);
+    pdf.text(`Doctor: ${doctorName || "Not Provided"}`, 10, 72);
+
+    // Add diagnosis and confidence
+    pdf.setFontSize(14);
+    pdf.text("Diagnosis", 10, 82);
+    pdf.setFontSize(12);
+    pdf.text(`The model predicts: ${diagnosis[predictionResult.predicted_class]} (${predictionResult.predicted_class})`, 10, 90);
+    pdf.text(`Confidence: ${(predictionResult.probability * 100).toFixed(2)}%`, 10, 96);
+
+    // Add recommendations
+    pdf.setFontSize(14);
+    pdf.text("Recommendations", 10, 106);
+    pdf.setFontSize(12);
+    pdf.text("- Follow-up scan in 3 months", 10, 114);
+    pdf.text("- Consultation with a neurologist", 10, 120);
+    pdf.text("- Additional cognitive testing", 10, 126);
+
+    // Add technical details
+    pdf.setFontSize(14);
+    pdf.text("Technical Details", 10, 136);
+    pdf.setFontSize(12);
+    pdf.text("- Model: Deep Learning CNN", 10, 144);
+    pdf.text("- Image Type: T1-weighted MRI", 10, 150);
+    pdf.text(`- Scan Date: ${new Date().toLocaleDateString()}`, 10, 156);
+
+    // Add preprocessed slice and heatmap
+    if (preprocessedImage || heatmap) {
+      pdf.setFontSize(14);
+      pdf.text("Images", pageWidth / 2, 166, { align: "center" });
+
+      const imageWidth = 80; // Fixed width for images
+      const imageHeight = 80; // Fixed height for images
+      const imageY = 172; // Fixed Y position
+      const preprocessedX = (pageWidth / 2) - imageWidth - 5; // Left of center
+      const heatmapX = (pageWidth / 2) + 5; // Right of center
+
+      if (preprocessedImage) {
+        pdf.addImage(preprocessedImage, 'PNG', preprocessedX, imageY, 70, 75);
+        pdf.text("Preprocessed Slice", preprocessedX + 10, imageY + imageHeight + 5);
+      }
+
+      if (heatmap) {
+        pdf.addImage(heatmap, 'PNG', heatmapX, imageY, imageWidth, 75);
+        pdf.text("Heatmap", heatmapX + 20, imageY + imageHeight + 5);
+      }
+    }
+
+    // Add comments section
+    if (comments.trim()) {
+      const commentsStartY = 260; // Adjust Y position
+      pdf.setFontSize(14);
+      pdf.text("Comments", 10, commentsStartY);
+      pdf.setFontSize(12);
+      pdf.text(comments, 10, commentsStartY + 8, { maxWidth: pageWidth - 20 });
+    }
+
+    // Add footer
+    pdf.setFontSize(10);
+    pdf.setTextColor(100);
+    pdf.text("This report is generated by Hospital MRI Analysis System.", pageWidth / 2, pageHeight - 10, { align: "center" });
+
     pdf.save('MRI-Analysis-Report.pdf');
   };
   // Download report as markdown file
@@ -383,7 +575,7 @@ Based on the findings, the following recommendations are made:
           <Card className="bg-white shadow-lg">
             <CardHeader>
               <CardTitle className="text-blue-600">Upload NIfTI MRI Image</CardTitle>
-            </CardHeader>
+              </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <Input
@@ -456,22 +648,10 @@ Based on the findings, the following recommendations are made:
                   <div className="p-4 bg-white rounded-md border border-gray-300">
                     <h3 className="font-medium mb-2 text-blue-600">Diagnosis:</h3>
                     <p className="mb-1 text-lg font-semibold">
-                      {diagnosis[predictionResult.predicted_class] + "( " + predictionResult.predicted_class + ")"  } 
+                      {diagnosis[predictionResult.predicted_class] + "(" + predictionResult.predicted_class + ")"  } 
                     </p>
                     <p>Probability of the Prediction being Correct: ({(predictionResult.probability * 100).toFixed(2)}%)</p>
 
-                    {predictionResult.features && (
-                      <div>
-                        <h4 className="font-medium mb-1 text-blue-600">Key Features:</h4>
-                        <ul className="list-disc pl-5 text-sm">
-                          {Object.entries(predictionResult.features).map(([key, value]) => (
-                            <li key={key}>
-                              <span className="font-medium">{key.replace("_", " ")}:</span> {value}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
                   </div>
 
                   {heatmap && (
@@ -516,125 +696,130 @@ Based on the findings, the following recommendations are made:
             </CardContent>
           </Card>
         </div>
+        <div>
+    {/* Report Preview */}
+    {report && (
+      <Card className="mt-6 bg-white shadow-lg">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-blue-600">Generated Report</CardTitle>
+          <div className="flex gap-2">
+            <Button
+              onClick={saveReportToSupabase}
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={saveStatus === "saving"}
+            >
+              {saveStatus === "saving" ? (
+                <>
+                  <RotateCw className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save to Database
+                </>
+              )}
+            </Button>
+            <Button onClick={() => downloadPDF()} className="bg-green-600 text-white hover:bg-green-700">
+              <Download className="mr-2 h-4 w-4" />
+              Download Report
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {saveStatus === "success" && (
+            <div className="mb-4 p-2 bg-green-50 text-green-600 rounded-md flex items-center">
+              <span>Report and MRI scan saved successfully!</span>
+            </div>
+          )}
+          {saveStatus === "error" && (
+            <div className="mb-4 p-2 bg-red-50 text-red-600 rounded-md flex items-center">
+              <span>Error saving report and MRI scan</span>
+            </div>
+          )}
+          <Tabs defaultValue="preview">
+            <TabsList className="mb-4 bg-gray-100">
+              <TabsTrigger
+                value="preview"
+                className="data-[state=active]:bg-white data-[state=active]:text-blue-600"
+              >
+                Preview
+              </TabsTrigger>
+              <TabsTrigger
+                value="markdown"
+                className="data-[state=active]:bg-white data-[state=active]:text-blue-600"
+              >
+                Markdown
+              </TabsTrigger>
+            </TabsList>
 
-        {/* Report Preview */}
-        {report && (
-          <Card className="mt-6 bg-white shadow-lg">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-blue-600">Generated Report</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  onClick={saveReportToSupabase}
-                  className="bg-blue-600 text-white hover:bg-blue-700"
-                  disabled={saveStatus === "saving"}
-                >
-                  {saveStatus === "saving" ? (
-                    <>
-                      <RotateCw className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Save to Database
-                    </>
-                  )}
-                </Button>
-                <Button onClick={() => downloadPDF()} className="bg-green-600 text-white hover:bg-green-700">
-                  <Download className="mr-2 h-4 w-4" />
-                  Download Report
-                </Button>
+            <TabsContent id="report-preview" value="preview" className="mt-0" ref={targetRef}>
+              <div className="p-4 bg-white rounded-md border border-gray-300 prose max-w-none">
+                <h1 className="text-2xl font-bold text-blue-600">MRI Analysis Report</h1>
+
+                <h2 className="text-xl font-semibold text-blue-600 mt-4">Patient</h2>
+                <p>
+                  <strong>Name:</strong> {patientName}
+                  <br />
+                  <strong>ID:</strong> {patientId}
+                </p>
+
+                <h2 className="text-xl font-semibold text-blue-600 mt-4">Diagnosis</h2>
+                <p>
+                  The model predicts <strong>{predictionResult.predicted_class}</strong> with a confidence of{" "}
+                  <strong>
+                    {((predictionResult.confidence || predictionResult.probability) * 100).toFixed(2)}%
+                  </strong>
+                  .
+                </p>
+
+                <h2 className="text-xl font-semibold text-blue-600 mt-4">Recommendations</h2>
+                <ul>
+                  <li>Follow-up scan in 3 months</li>
+                  <li>Consultation with a neurologist</li>
+                  <li>Additional cognitive testing</li>
+                </ul>
+
+                <h2 className="text-xl font-semibold text-blue-600 mt-4">Technical Details</h2>
+                <ul>
+                  <li>Model: Deep Learning CNN</li>
+                  <li>Image Type: T1-weighted MRI</li>
+                  <li>Scan Date: {new Date().toLocaleDateString()}</li>
+                </ul>
               </div>
-            </CardHeader>
-            <CardContent>
-              {saveStatus === "success" && (
-                <div className="mb-4 p-2 bg-green-50 text-green-600 rounded-md flex items-center">
-                  <span>Report and MRI scan saved successfully!</span>
-                </div>
-              )}
-              {saveStatus === "error" && (
-                <div className="mb-4 p-2 bg-red-50 text-red-600 rounded-md flex items-center">
-                  <span>Error saving report and MRI scan</span>
-                </div>
-              )}
-              <Tabs defaultValue="preview">
-                <TabsList className="mb-4 bg-gray-100">
-                  <TabsTrigger
-                    value="preview"
-                    className="data-[state=active]:bg-white data-[state=active]:text-blue-600"
-                  >
-                    Preview
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="markdown"
-                    className="data-[state=active]:bg-white data-[state=active]:text-blue-600"
-                  >
-                    Markdown
-                  </TabsTrigger>
-                </TabsList>
+            </TabsContent>
 
-                <TabsContent id="report-preview" value="preview" className="mt-0" ref={targetRef}>
-                  <div className="p-4 bg-white rounded-md border border-gray-300 prose max-w-none">
-                    <h1 className="text-2xl font-bold text-blue-600">MRI Analysis Report</h1>
+            <TabsContent value="markdown" className="mt-0">
+              <Textarea
+                value={report}
+                readOnly
+                className="font-mono text-sm h-[400px] border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring focus:ring-blue-300 focus:border-blue-500"
+              />
+              <Button
+                onClick={() => navigator.clipboard.writeText(report)}
+                className="mt-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Copy to Clipboard
+              </Button>
+            </TabsContent>
+          </Tabs>
 
-                    <h2 className="text-xl font-semibold text-blue-600 mt-4">Patient</h2>
-                    <p>
-                      <strong>Name:</strong> {patientName}
-                      <br />
-                      <strong>ID:</strong> {patientId}
-                    </p>
+          <div className="mt-4">
+            <h3 className="text-lg font-semibold text-blue-600">Add Comments</h3>
+            <Textarea
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              placeholder="Add your comments here..."
+              className="mt-2 font-mono text-sm h-[100px] border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring focus:ring-blue-300 focus:border-blue-500"
+            />
+          </div>
+        </CardContent>
+      </Card>
+    )}
+  </div>
 
-                    <h2 className="text-xl font-semibold text-blue-600 mt-4">Diagnosis</h2>
-                    <p>
-                      The model predicts <strong>{predictionResult.predicted_class}</strong> with a confidence of{" "}
-                      <strong>
-                        {((predictionResult.confidence || predictionResult.probability) * 100).toFixed(2)}%
-                      </strong>
-                      .
-                    </p>
 
-                    <h2 className="text-xl font-semibold text-blue-600 mt-4">Key Findings</h2>
-                    <ul>
-                      {Object.entries(predictionResult.features).map(([key, value]) => (
-                        <li key={key}>
-                          <strong>{key.replace("_", " ")}:</strong> {value}
-                        </li>
-                      ))}
-                    </ul>
-
-                    <h2 className="text-xl font-semibold text-blue-600 mt-4">Recommendations</h2>
-                    <ul>
-                      <li>Follow-up scan in 3 months</li>
-                      <li>Consultation with a neurologist</li>
-                      <li>Additional cognitive testing</li>
-                    </ul>
-
-                    <h2 className="text-xl font-semibold text-blue-600 mt-4">Technical Details</h2>
-                    <ul>
-                      <li>Model: Deep Learning CNN</li>
-                      <li>Image Type: T1-weighted MRI</li>
-                      <li>Scan Date: {new Date().toLocaleDateString()}</li>
-                    </ul>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="markdown" className="mt-0">
-                  <Textarea
-                    value={report}
-                    readOnly
-                    className="font-mono text-sm h-[400px] border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring focus:ring-blue-300 focus:border-blue-500"
-                  />
-                  <Button
-                    onClick={() => navigator.clipboard.writeText(report)}
-                    className="mt-2 bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    Copy to Clipboard
-                  </Button>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        )}
+       
       </main>
     </div>
   )

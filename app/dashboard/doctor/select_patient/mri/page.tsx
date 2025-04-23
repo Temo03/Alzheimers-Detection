@@ -1,4 +1,3 @@
-//@ts-nocheck
 "use client"
 
 import { useEffect, useState } from "react"
@@ -7,8 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  HeartPulse,
-  FileText,
+  Brain,
   Download,
   ArrowLeft,
   Calendar,
@@ -17,12 +15,12 @@ import {
   User,
   AlertCircle,
   Search,
+  FileIcon,
   ChevronLeft,
   ChevronRight,
   Filter,
   SortAsc,
   SortDesc,
-  FileIcon,
 } from "lucide-react"
 import { createClient } from "@/utils/supabase/client"
 import dynamic from "next/dynamic"
@@ -32,13 +30,11 @@ import { Badge } from "@/components/ui/badge"
 
 const Loading = dynamic(() => import("../../../../loading"), { ssr: false })
 
-interface Report {
-  ReportID: string
-  ReportURL: string
-  ReportType?: string
-  BrainScans: {
-    Date: string
-  }
+interface BrainScan {
+  ImageID: string
+  ImageType: string
+  Date: string
+  ImageURL: string
 }
 
 interface Patient {
@@ -50,31 +46,34 @@ interface Patient {
   Gender?: string
 }
 
-export default function PatientReportsPage() {
+type SortField = "Date" | "ImageType" | "fileName"
+type SortDirection = "asc" | "desc"
+
+export default function PatientMRIPage() {
   const [patientInfo, setPatientInfo] = useState<Patient | null>(null)
-  const [reports, setReports] = useState<Report[]>([])
-  const [filteredReports, setFilteredReports] = useState<Report[]>([])
+  const [brainScans, setBrainScans] = useState<BrainScan[]>([])
+  const [filteredScans, setFilteredScans] = useState<BrainScan[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [reportTypeFilter, setReportTypeFilter] = useState<string>("all")
+  const [imageTypeFilter, setImageTypeFilter] = useState<string>("all")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
-  const [sortField, setSortField] = useState<"ReportID" | "Date" | "fileName">("Date")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [sortField, setSortField] = useState<SortField>("Date")
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
 
-  // Extract unique report types for filtering
-  const reportTypes =
-    reports.length > 0 ? ["all", ...new Set(reports.map((report) => report.ReportType || "Standard"))] : ["all"]
+  // Extract unique image types for filtering
+  const imageTypes =
+    brainScans.length > 0 ? ["all", ...new Set(brainScans.map((scan) => scan.ImageType || "Unknown"))] : ["all"]
 
   useEffect(() => {
-    const fetchPatientAndReports = async () => {
+    const fetchPatientAndScans = async () => {
       try {
         setLoading(true)
         setError(null)
@@ -86,7 +85,7 @@ export default function PatientReportsPage() {
           return
         }
 
-        // Fetch Patient Info - Using original logic
+        // Fetch Patient Info
         const { data: patient, error: patientError } = await supabase
           .from("Patients")
           .select("*")
@@ -107,30 +106,20 @@ export default function PatientReportsPage() {
           Gender: patient.Gender,
         })
 
-        // Fetch Reports for the selected patient - Using original logic
-        const { data: reportsData, error: reportsError } = await supabase
-          .from("Reports")
-          .select(`
-          ReportID,
-          ReportURL,
-          BrainScans (Date)
-        `)
+        // Fetch Brain Scans for the selected patient
+        const { data: scansData, error: scansError } = await supabase
+          .from("BrainScans")
+          .select("*")
           .eq("PatientID", patient.PatientID)
+          .order("Date", { ascending: false })
 
-        if (reportsError) {
-          setError("Error fetching patient reports")
+        if (scansError) {
+          setError("Error fetching brain scans")
           return
         }
 
-        // Add ReportType if needed for filtering (can be removed if not in the database)
-        const reportsWithType =
-          reportsData?.map((report) => ({
-            ...report,
-            ReportType: report.ReportType || "Standard", // Use existing or default
-          })) || []
-
-        setReports(reportsWithType)
-        setFilteredReports(reportsWithType)
+        setBrainScans(scansData || [])
+        setFilteredScans(scansData || [])
       } catch (err: any) {
         console.error(err.message)
         setError("An unexpected error occurred")
@@ -139,30 +128,27 @@ export default function PatientReportsPage() {
       }
     }
 
-    fetchPatientAndReports()
+    fetchPatientAndScans()
   }, [searchParams])
 
   // Apply filters, sorting, and pagination
   useEffect(() => {
-    let result = [...reports]
+    let result = [...brainScans]
 
-    // Apply report type filter
-    if (reportTypeFilter !== "all") {
-      result = result.filter((report) => (report.ReportType || "Standard") === reportTypeFilter)
+    // Apply image type filter
+    if (imageTypeFilter !== "all") {
+      result = result.filter((scan) => (scan.ImageType || "Unknown") === imageTypeFilter)
     }
 
     // Apply search term
     if (searchTerm) {
       const term = searchTerm.toLowerCase()
-      result = result.filter((report) => {
-        const fileName = report.ReportURL.split("/").pop() || ""
+      result = result.filter((scan) => {
+        const fileName = scan.ImageURL.split("/").pop() || ""
         return (
-          report.ReportID.toLowerCase().includes(term) ||
-          (report.ReportType || "").toLowerCase().includes(term) ||
+          (scan.ImageType || "").toLowerCase().includes(term) ||
           fileName.toLowerCase().includes(term) ||
-          formatDate(report.BrainScans?.Date || "")
-            .toLowerCase()
-            .includes(term)
+          formatDate(scan.Date).toLowerCase().includes(term)
         )
       })
     }
@@ -172,65 +158,63 @@ export default function PatientReportsPage() {
       let comparison = 0
 
       if (sortField === "Date") {
-        const dateA = a.BrainScans?.Date ? new Date(a.BrainScans.Date).getTime() : 0
-        const dateB = b.BrainScans?.Date ? new Date(b.BrainScans.Date).getTime() : 0
-        comparison = dateA - dateB
-      } else if (sortField === "ReportID") {
-        comparison = a.ReportID.localeCompare(b.ReportID)
+        comparison = new Date(a.Date).getTime() - new Date(b.Date).getTime()
+      } else if (sortField === "ImageType") {
+        comparison = (a.ImageType || "").localeCompare(b.ImageType || "")
       } else if (sortField === "fileName") {
-        const fileNameA = a.ReportURL.split("/").pop() || ""
-        const fileNameB = b.ReportURL.split("/").pop() || ""
+        const fileNameA = a.ImageURL.split("/").pop() || ""
+        const fileNameB = b.ImageURL.split("/").pop() || ""
         comparison = fileNameA.localeCompare(fileNameB)
       }
 
       return sortDirection === "asc" ? comparison : -comparison
     })
 
-    setFilteredReports(result)
+    setFilteredScans(result)
     setCurrentPage(1) // Reset to first page when filters change
-  }, [reports, searchTerm, reportTypeFilter, sortField, sortDirection])
+  }, [brainScans, searchTerm, imageTypeFilter, sortField, sortDirection])
 
-  const viewReportDetails = (url: string) => {
-    window.open(url, "_blank")
-  }
-
-  // Revert to original download function
-  const downloadReport = (url: string) => {
+  const downloadScan = async (scan: BrainScan) => {
     try {
-      const downloadUrl = `${url}?download`
+      setDownloadingId(scan.ImageID)
+      const response = await fetch(scan.ImageURL)
+      const blob = await response.blob()
+      const downloadUrl = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = downloadUrl
-      const fileName = url.split("/").pop() || "report.pdf"
+      const fileName = scan.ImageURL.split("/").pop() || "brain-scan.jpg"
       link.download = fileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+      URL.revokeObjectURL(downloadUrl)
     } catch (error) {
-      console.error("Error downloading report:", error.message)
+      console.error("Error downloading scan:", error)
+    } finally {
+      setDownloadingId(null)
     }
   }
 
-  // Update the delete report function to use the original database logic
-  const deleteReport = async (report: Report) => {
+  const deleteScan = async (scan: BrainScan) => {
     try {
-      if (!confirm("Are you sure you want to delete this report? This action cannot be undone.")) {
+      if (!confirm("Are you sure you want to delete this scan? This action cannot be undone.")) {
         return
       }
 
-      setDeletingId(report.ReportID)
+      setDeletingId(scan.ImageID)
 
-      const { error } = await supabase.from("Reports").delete().eq("ReportID", report.ReportID)
+      const { error } = await supabase.from("BrainScans").delete().eq("ImageID", scan.ImageID)
 
       if (error) {
         throw new Error(error.message)
       }
 
-      // Update the local state to remove the deleted report
-      setReports((prevReports) => prevReports.filter((r) => r.ReportID !== report.ReportID))
-      setFilteredReports((prevReports) => prevReports.filter((r) => r.ReportID !== report.ReportID))
+      // Update the local state to remove the deleted scan
+      setBrainScans((prevScans) => prevScans.filter((s) => s.ImageID !== scan.ImageID))
+      setFilteredScans((prevScans) => prevScans.filter((s) => s.ImageID !== scan.ImageID))
     } catch (error) {
-      console.error("Error deleting report:", error)
-      setError("Failed to delete report. Please try again.")
+      console.error("Error deleting scan:", error)
+      setError("Failed to delete scan. Please try again.")
     } finally {
       setDeletingId(null)
     }
@@ -251,11 +235,11 @@ export default function PatientReportsPage() {
   }
 
   // Calculate pagination
-  const totalPages = Math.ceil(filteredReports.length / itemsPerPage)
+  const totalPages = Math.ceil(filteredScans.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedReports = filteredReports.slice(startIndex, startIndex + itemsPerPage)
+  const paginatedScans = filteredScans.slice(startIndex, startIndex + itemsPerPage)
 
-  const handleSort = (field: "ReportID" | "Date" | "fileName") => {
+  const handleSort = (field: SortField) => {
     if (sortField === field) {
       // Toggle direction if same field
       setSortDirection(sortDirection === "asc" ? "desc" : "asc")
@@ -283,9 +267,9 @@ export default function PatientReportsPage() {
           </Button>
           <div>
             <div className="flex items-center">
-              <HeartPulse className="h-7 w-7 text-green-600 mr-2" />
+              <Brain className="h-7 w-7 text-purple-600 mr-2" />
               <h1 className="text-2xl sm:text-3xl font-bold text-blue-800">
-                {patientInfo?.Name ? `${patientInfo.Name.split(" ")[0]}'s Reports` : "Patient Reports"}
+                {patientInfo?.Name ? `${patientInfo.Name.split(" ")[0]}'s MRI Scans` : "Patient MRI Scans"}
               </h1>
             </div>
             {patientInfo && (
@@ -377,36 +361,36 @@ export default function PatientReportsPage() {
             </div>
           )}
 
-          {/* Reports Section */}
+          {/* MRI Scans Section */}
           <div className="lg:col-span-2">
             <Card className="border-none shadow-lg">
-              <CardHeader className="bg-green-100 rounded-t-lg">
+              <CardHeader className="bg-purple-100 rounded-t-lg">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                   <CardTitle className="text-blue-800 flex items-center">
-                    <FileText className="h-5 w-5 mr-2 text-green-600" />
-                    Medical Reports
+                    <Brain className="h-5 w-5 mr-2 text-purple-600" />
+                    MRI Brain Scans
                   </CardTitle>
-                  <CardDescription className="text-green-700 m-0">
-                    {reports.length} {reports.length === 1 ? "report" : "reports"} available
+                  <CardDescription className="text-purple-700 m-0">
+                    {brainScans.length} {brainScans.length === 1 ? "scan" : "scans"} available
                   </CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="p-6">
-                {reports.length > 0 ? (
+                {brainScans.length > 0 ? (
                   <>
                     {/* Search and Filter Controls */}
                     <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="relative">
                         <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
                         <Input
-                          placeholder="Search by ID, type, filename or date..."
+                          placeholder="Search by type, filename or date..."
                           className="pl-8 bg-white border-gray-200"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                         />
                       </div>
                       <div className="flex gap-2">
-                        <Select value={reportTypeFilter} onValueChange={setReportTypeFilter}>
+                        <Select value={imageTypeFilter} onValueChange={setImageTypeFilter}>
                           <SelectTrigger className="w-full">
                             <div className="flex items-center">
                               <Filter className="h-4 w-4 mr-2 text-gray-500" />
@@ -414,9 +398,9 @@ export default function PatientReportsPage() {
                             </div>
                           </SelectTrigger>
                           <SelectContent>
-                            {reportTypes.map((type) => (
+                            {imageTypes.map((type) => (
                               <SelectItem key={type} value={type}>
-                                {type === "all" ? "All Types" : type || "Standard"}
+                                {type === "all" ? "All Types" : type || "Unknown"}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -439,46 +423,46 @@ export default function PatientReportsPage() {
                     </div>
 
                     {/* Active Filters */}
-                    {(searchTerm || reportTypeFilter !== "all") && (
+                    {(searchTerm || imageTypeFilter !== "all") && (
                       <div className="flex flex-wrap gap-2 mb-4">
                         {searchTerm && (
                           <Badge
                             variant="outline"
-                            className="bg-green-50 text-green-700 border-green-200 flex items-center gap-1"
+                            className="bg-purple-50 text-purple-700 border-purple-200 flex items-center gap-1"
                           >
                             <Search className="h-3 w-3" />
                             Search: {searchTerm}
                             <button
-                              className="ml-1 hover:bg-green-100 rounded-full p-0.5"
+                              className="ml-1 hover:bg-purple-100 rounded-full p-0.5"
                               onClick={() => setSearchTerm("")}
                             >
                               ✕
                             </button>
                           </Badge>
                         )}
-                        {reportTypeFilter !== "all" && (
+                        {imageTypeFilter !== "all" && (
                           <Badge
                             variant="outline"
                             className="bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1"
                           >
                             <Filter className="h-3 w-3" />
-                            Type: {reportTypeFilter}
+                            Type: {imageTypeFilter}
                             <button
                               className="ml-1 hover:bg-blue-100 rounded-full p-0.5"
-                              onClick={() => setReportTypeFilter("all")}
+                              onClick={() => setImageTypeFilter("all")}
                             >
                               ✕
                             </button>
                           </Badge>
                         )}
-                        {(searchTerm || reportTypeFilter !== "all") && (
+                        {(searchTerm || imageTypeFilter !== "all") && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-6 text-xs text-gray-500"
                             onClick={() => {
                               setSearchTerm("")
-                              setReportTypeFilter("all")
+                              setImageTypeFilter("all")
                             }}
                           >
                             Clear all
@@ -489,23 +473,23 @@ export default function PatientReportsPage() {
 
                     {/* Results Summary */}
                     <div className="text-sm text-gray-500 mb-2">
-                      Showing {paginatedReports.length} of {filteredReports.length} reports
-                      {filteredReports.length !== reports.length && ` (filtered from ${reports.length} total)`}
+                      Showing {paginatedScans.length} of {filteredScans.length} scans
+                      {filteredScans.length !== brainScans.length && ` (filtered from ${brainScans.length} total)`}
                     </div>
 
                     {/* Table */}
-                    {filteredReports.length > 0 ? (
+                    {filteredScans.length > 0 ? (
                       <div className="border rounded-md">
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead
                                 className="font-semibold cursor-pointer"
-                                onClick={() => handleSort("ReportID")}
+                                onClick={() => handleSort("ImageType")}
                               >
                                 <div className="flex items-center">
-                                  Report ID
-                                  {sortField === "ReportID" &&
+                                  Type
+                                  {sortField === "ImageType" &&
                                     (sortDirection === "asc" ? (
                                       <SortAsc className="h-4 w-4 ml-1" />
                                     ) : (
@@ -538,19 +522,19 @@ export default function PatientReportsPage() {
                                     ))}
                                 </div>
                               </TableHead>
-                              <TableHead className="font-semibold">Actions</TableHead>
+                              <TableHead className="font-semibold">Action</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {paginatedReports.map((report) => {
-                              const fileName = report.ReportURL.split("/").pop() || "report.pdf"
+                            {paginatedScans.map((scan) => {
+                              const fileName = scan.ImageURL.split("/").pop() || "brain-scan"
                               return (
-                                <TableRow key={report.ReportID} className="hover:bg-gray-50">
-                                  <TableCell className="font-medium">{report.ReportID}</TableCell>
+                                <TableRow key={scan.ImageID} className="hover:bg-gray-50">
+                                  <TableCell className="font-medium">{scan.ImageType || "Brain MRI"}</TableCell>
                                   <TableCell>
                                     <div className="flex items-center">
-                                      <Calendar className="h-4 w-4 mr-2 text-green-500" />
-                                      {report.BrainScans?.Date ? formatDate(report.BrainScans.Date) : "N/A"}
+                                      <Calendar className="h-4 w-4 mr-2 text-purple-500" />
+                                      {formatDate(scan.Date)}
                                     </div>
                                   </TableCell>
                                   <TableCell className="max-w-[200px] truncate" title={fileName}>
@@ -564,29 +548,28 @@ export default function PatientReportsPage() {
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        className="text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
-                                        onClick={() => viewReportDetails(report.ReportURL)}
-                                        disabled={deletingId === report.ReportID}
+                                        className="text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
+                                        onClick={() => downloadScan(scan)}
+                                        disabled={downloadingId === scan.ImageID || deletingId === scan.ImageID}
                                       >
-                                        <FileText className="h-4 w-4 mr-1" /> View
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300"
-                                        onClick={() => downloadReport(report.ReportURL)}
-                                        disabled={deletingId === report.ReportID}
-                                      >
-                                        <Download className="h-4 w-4 mr-1" /> Download
+                                        {downloadingId === scan.ImageID ? (
+                                          <>
+                                            <span className="animate-spin mr-2">⏳</span> Downloading...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Download className="h-4 w-4 mr-1" /> Download
+                                          </>
+                                        )}
                                       </Button>
                                       <Button
                                         variant="outline"
                                         size="sm"
                                         className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
-                                        onClick={() => deleteReport(report)}
-                                        disabled={deletingId === report.ReportID}
+                                        onClick={() => deleteScan(scan)}
+                                        disabled={downloadingId === scan.ImageID || deletingId === scan.ImageID}
                                       >
-                                        {deletingId === report.ReportID ? (
+                                        {deletingId === scan.ImageID ? (
                                           <>
                                             <span className="animate-spin mr-2">⏳</span> Deleting...
                                           </>
@@ -625,14 +608,14 @@ export default function PatientReportsPage() {
                     ) : (
                       <div className="text-center py-8 border rounded-md bg-gray-50">
                         <Search className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                        <p className="text-gray-500">No reports match your search criteria</p>
+                        <p className="text-gray-500">No scans match your search criteria</p>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="mt-2 text-green-600"
+                          className="mt-2 text-purple-600"
                           onClick={() => {
                             setSearchTerm("")
-                            setReportTypeFilter("all")
+                            setImageTypeFilter("all")
                           }}
                         >
                           Clear filters
@@ -672,10 +655,10 @@ export default function PatientReportsPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                     <Search className="h-12 w-12 text-gray-300 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-700 mb-1">No Reports Found</h3>
+                    <h3 className="text-lg font-medium text-gray-700 mb-1">No MRI Scans Found</h3>
                     <p className="text-gray-500 max-w-md">
-                      There are no medical reports available for this patient yet. Reports will appear here once they
-                      are uploaded.
+                      There are no MRI scans available for this patient yet. Scans will appear here once they are
+                      uploaded.
                     </p>
                   </div>
                 )}

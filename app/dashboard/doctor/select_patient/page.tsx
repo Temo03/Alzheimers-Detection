@@ -1,43 +1,44 @@
-"use client";
+ "use client"
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
-import { ArrowLeft, Search, User, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import dynamic from "next/dynamic"; // Import dynamic for lazy loading
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { createClient } from "@/utils/supabase/client"
+import { ArrowLeft, Search, User, FileText, Brain } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import dynamic from "next/dynamic" // Import dynamic for lazy loading
 
-const Loading = dynamic(() => import("../../../loading"), { ssr: false }); // Dynamically import loading.tsx
-
+const Loading = dynamic(() => import("../../../loading"), { ssr: false }) // Dynamically import loading.tsx
 
 interface Patient {
-  PatientID: string;
-  Name: string;
-  Age: number;
-  Gender: string;
-  email: string;
+  PatientID: string
+  Name: string
+  Age: number
+  Gender: string
+  email: string
 }
 
 export default function SelectPatient() {
-  const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
+  const router = useRouter()
+  const [searchTerm, setSearchTerm] = useState("")
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const supabase = createClient()
 
   useEffect(() => {
     const fetchPatients = async () => {
       try {
         // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
 
         if (!user?.email) {
-          throw new Error("User not authenticated");
+          throw new Error("User not authenticated")
         }
 
         // Get doctor's ProviderID from HealthcareProviders table
@@ -45,54 +46,56 @@ export default function SelectPatient() {
           .from("HealthcareProviders")
           .select("ProviderID")
           .eq("email", user.email)
-          .single();
+          .single()
 
         if (doctorError || !doctorData) {
-          throw new Error("Doctor profile not found");
+          throw new Error("Doctor profile not found")
         }
 
         // Fetch patients for this doctor
         const { data: patientsData, error: patientsError } = await supabase
           .from("Patients")
           .select("*")
-          .eq("Doctor", doctorData.ProviderID);
+          .eq("Doctor", doctorData.ProviderID)
 
         if (patientsError) {
-          throw new Error("Error fetching patients");
+          throw new Error("Error fetching patients")
         }
 
-        setPatients(patientsData || []);
+        setPatients(patientsData || [])
       } catch (err: any) {
-        setError(err.message);
+        setError(err.message)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    fetchPatients();
-  }, []);
+    fetchPatients()
+  }, [])
 
-  const filteredPatients = patients.filter((patient) =>
-    patient.Name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPatients = patients.filter((patient) => patient.Name.toLowerCase().includes(searchTerm.toLowerCase()))
 
   const getInitials = (name: string) => {
     return name
       .split(" ")
       .map((part) => part[0])
       .join("")
-      .toUpperCase();
-  };
+      .toUpperCase()
+  }
 
   const selectPatient = (patientId: string) => {
-    router.push(`/dashboard/doctor/select_patient/run_model?patientId=${patientId}`);
-  };
+    router.push(`/dashboard/doctor/select_patient/run_model?patientId=${patientId}`)
+  }
 
   const viewReports = (patientId: string) => {
-    router.push(`/dashboard/doctor/select_patient/reports?patientId=${patientId}`);
-  };
+    router.push(`/dashboard/doctor/select_patient/reports?patientId=${patientId}`)
+  }
 
-  if (loading) return <Loading />;
+  const viewMRI = (patientId: string) => {
+    router.push(`/dashboard/doctor/select_patient/mri?patientId=${patientId}`)
+  }
+
+  if (loading) return <Loading />
 
   if (error) {
     return (
@@ -104,7 +107,7 @@ export default function SelectPatient() {
           </Button>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -147,9 +150,7 @@ export default function SelectPatient() {
               <CardContent className="pt-6">
                 <div className="flex items-start gap-4">
                   <Avatar className="h-12 w-12 border-2 border-blue-200">
-                    <AvatarFallback className="bg-blue-100 text-blue-700">
-                      {getInitials(patient.Name)}
-                    </AvatarFallback>
+                    <AvatarFallback className="bg-blue-100 text-blue-700">{getInitials(patient.Name)}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
                     <h3 className="font-semibold text-blue-800">{patient.Name}</h3>
@@ -157,15 +158,29 @@ export default function SelectPatient() {
                       {patient.Age} years, {patient.Gender}
                     </div>
                     <Separator className="my-3 bg-blue-100" />
-                    <div className="mt-4 flex justify-between">
+                    <div className="mt-4 grid grid-cols-3 gap-3">
+                      {/* MRI Button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                        onClick={(e) => {
+                          e.stopPropagation() // Prevent triggering `selectPatient`
+                          viewMRI(patient.PatientID)
+                        }}
+                      >
+                        <Brain className="h-3.5 w-3.5 mr-1" />
+                        MRI
+                      </Button>
+
                       {/* Reports Button */}
                       <Button
                         variant="outline"
                         size="sm"
                         className="text-blue-600 border-blue-200 hover:bg-blue-50"
                         onClick={(e) => {
-                          e.stopPropagation(); // Prevent triggering `selectPatient`
-                          viewReports(patient.PatientID);
+                          e.stopPropagation() // Prevent triggering `selectPatient`
+                          viewReports(patient.PatientID)
                         }}
                       >
                         <FileText className="h-3.5 w-3.5 mr-1" />
@@ -190,5 +205,5 @@ export default function SelectPatient() {
         )}
       </div>
     </div>
-  );
+  )
 }
