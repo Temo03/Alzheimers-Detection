@@ -358,7 +358,7 @@ Based on the findings, the following recommendations are made:
 
     // Add comments section
     if (comments.trim()) {
-      const commentsStartY = 260; // Adjust Y position
+      const commentsStartY = 270; // Adjust Y position
       pdf.setFontSize(14);
       pdf.text("Comments", 10, commentsStartY);
       pdf.setFontSize(12);
@@ -486,7 +486,7 @@ Based on the findings, the following recommendations are made:
 
     // Add comments section
     if (comments.trim()) {
-      const commentsStartY = 260; // Adjust Y position
+      const commentsStartY = 270; // Adjust Y position
       pdf.setFontSize(14);
       pdf.text("Comments", 10, commentsStartY);
       pdf.setFontSize(12);
